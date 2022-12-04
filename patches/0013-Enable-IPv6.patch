@@ -1,0 +1,39 @@
+From ac30992bda336a11a8092f5001bdad9e06e9b291 Mon Sep 17 00:00:00 2001
+From: Venkata Chimata <venkatch@gmail.com>
+Date: Wed, 15 Jun 2022 10:54:32 +0530
+Subject: [PATCH] Enable IPv6
+
+---
+ gl_b1300.diffconfig | 5 +++--
+ minim.baseconfig    | 2 --
+ 2 files changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/gl_b1300.diffconfig b/gl_b1300.diffconfig
+index 9a29428f0a..1a0aebc92f 100644
+--- a/gl_b1300.diffconfig
++++ b/gl_b1300.diffconfig
+@@ -13,5 +13,6 @@ CONFIG_LUCI_LANG_en=y
+ CONFIG_LUCI_LANG_es=y
+ CONFIG_LUCI_LANG_fr=y
+ CONFIG_PACKAGE_kmod-tun=y
+-# CONFIG_KERNEL_IPV6 is not set
+-# CONFIG_IPV6 is not set
++CONFIG_KERNEL_IPV6=y
++CONFIG_IPV6=y
++# CONFIG_PACKAGE_kmod-nft-core is not set
+diff --git a/minim.baseconfig b/minim.baseconfig
+index 9eb258b79d..36af40b5c1 100644
+--- a/minim.baseconfig
++++ b/minim.baseconfig
+@@ -6,8 +6,6 @@ CONFIG_DEVEL=y
+ CONFIG_DEBUG=y
+ CONFIG_DOWNLOAD_FOLDER="$(TOPDIR)/downloads"
+ CONFIG_IMAGEOPT=y
+-# CONFIG_IPV6 is not set
+-# CONFIG_KERNEL_IPV6 is not set
+ # CONFIG_KERNEL_KALLSYMS is not set
+ CONFIG_LIBCURL_COOKIES=y
+ CONFIG_LIBCURL_FILE=y
+-- 
+2.25.1
+

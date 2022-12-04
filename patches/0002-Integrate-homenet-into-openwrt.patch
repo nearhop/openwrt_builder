@@ -1,0 +1,117 @@
+From 65298f577a5c4e72bae3d8c732f8f3d6af5133db Mon Sep 17 00:00:00 2001
+From: Venkata Chimata <venkatch@gmail.com>
+Date: Sat, 26 Mar 2022 17:03:35 +0530
+Subject: [PATCH] Integrate homenet into openwrt
+
+---
+ build                                |  5 +++
+ feeds.conf.default                   |  1 +
+ local-feeds/nearhop/homenet/Makefile | 53 ++++++++++++++++++++++++++++
+ minim.baseconfig                     |  1 +
+ 4 files changed, 60 insertions(+)
+ create mode 100644 local-feeds/nearhop/homenet/Makefile
+
+diff --git a/build b/build
+index 82db098d28..4cdbb0babb 100755
+--- a/build
++++ b/build
+@@ -83,6 +83,7 @@ NUM_CORES=${NUM_CORES:-$(grep -c ^processor /proc/cpuinfo)}
+ DATETIME=`date +"%y%m%d.%H%M.%S.0" | sed -E 's/\b0+([1-9][0-9]*)\b/\1/g'`
+ export MINIM_VERSION_NUMBER=${MINIM_VERSION_NUMBER:-$DATETIME}
+ export MINIM_UNUM_DIR=${MINIM_UNUM_DIR:-"$MY_DIR/../unum-sdk"}
++export HOMENET_DIR=${HOMENET_DIR:-"$MY_DIR/../homenet"}
+ export MINIM_DEFAULT_TARGET=$BUILD_TARGET
+ export MINIM_VERSION_NICK="LEDE"
+ export MINIM_VERSION_CODE=`git rev-parse --short HEAD`
+@@ -96,6 +97,10 @@ if [ ! -e "$UNUM_MAKEFILE" ]; then
+   echo "MINIM_UNUM_DIR=/work/unum-sdk ./build gl_b1300"
+   exit -1
+ fi
++if [ ! -e "$HOMENET_DIR" ]; then
++  echo "Unable to find: ../$HOMENET_DIR"
++  exit -1
++fi
+ 
+ # From now on stop on any error
+ set -e
+diff --git a/feeds.conf.default b/feeds.conf.default
+index 69bffb120b..95a69d8105 100644
+--- a/feeds.conf.default
++++ b/feeds.conf.default
+@@ -3,3 +3,4 @@ src-git luci https://git.openwrt.org/project/luci.git^cc582ebfb3cb2782db841ad2a4
+ src-git routing https://git.openwrt.org/feed/routing.git^10d3ffd8b30186b49538167bac1fa1bf9c88f860
+ src-git telephony https://git.openwrt.org/feed/telephony.git^001ae7137c88bb679284bfac5087cde65b5abf9a
+ src-link minim ../local-feeds/minim
++src-link nearhop ../local-feeds/nearhop
+diff --git a/local-feeds/nearhop/homenet/Makefile b/local-feeds/nearhop/homenet/Makefile
+new file mode 100644
+index 0000000000..67377bec7c
+--- /dev/null
++++ b/local-feeds/nearhop/homenet/Makefile
+@@ -0,0 +1,53 @@
++#
++# Copyright (C) 2022 nearhop.com
++#
++include $(TOPDIR)/rules.mk
++
++PKG_NAME:=homenet
++PKG_VERSION:=0
++PKG_RELEASE:=0
++
++PKG_LICENSE:=MIT
++PKG_LICENSE_FILES:=LICENSE
++
++PKG_BUILD_DEPENDS:=golang/host
++PKG_BUILD_PARALLEL:=1
++PKG_USE_MIPS16:=0
++
++GO_PKG_LDFLAGS_X:=\
++	main.Build=$(PKG_VERSION)
++
++include $(INCLUDE_DIR)/package.mk
++include ../../../feeds/packages/lang/golang/golang-package.mk
++
++define Package/homenet
++  SECTION:=net
++  CATEGORY:=Network
++  TITLE:=homenet
++  DEPENDS:=$(GO_ARCH_DEPENDS) +kmod-tun
++endef
++
++define Package/homenet/description
++  Homenet is a scalable overlay networking tool with a focus on performance, simplicity
++  and security. It lets you seamlessly connect computers anywhere in the world.
++endef
++
++define Build/Prepare
++	mkdir -p $(PKG_BUILD_DIR)
++	$(CP) $(HOMENET_DIR)/* $(PKG_BUILD_DIR)/
++endef
++
++define Build/Compile
++	cd $(PKG_BUILD_DIR); make bin-$(MINIM_DEFAULT_TARGET)
++endef
++
++define Package/homenet/install
++	$(INSTALL_DIR) $(1)/usr/sbin
++	$(INSTALL_DIR) $(1)/sbin
++	$(INSTALL_DIR) $(1)/etc/
++	$(INSTALL_DIR) $(1)/etc/init.d/
++	$(CP) $(PKG_BUILD_DIR)/rootfs/linux*/* $(1)
++endef
++
++$(eval $(call GoBinPackage,homenet))
++$(eval $(call BuildPackage,homenet))
+diff --git a/minim.baseconfig b/minim.baseconfig
+index 56aaab7f38..424785abd3 100644
+--- a/minim.baseconfig
++++ b/minim.baseconfig
+@@ -1,4 +1,5 @@
+ CONFIG_PACKAGE_unum=y
++CONFIG_PACKAGE_homenet=y
+ CONFIG_PACKAGE_iperf3=y
+ CONFIG_ALL_NONSHARED=y
+ CONFIG_DEVEL=y
+-- 
+2.25.1
+

@@ -1,0 +1,21 @@
+From 3441487886f8b5984c443f50eb07274a52af3cc8 Mon Sep 17 00:00:00 2001
+From: Venkata Chimata <venkatch@gmail.com>
+Date: Tue, 17 May 2022 13:10:04 +0530
+Subject: [PATCH] Enable conntrack in .config
+
+---
+ gl_b1300.diffconfig | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/gl_b1300.diffconfig b/gl_b1300.diffconfig
+index 825d1a0acc..74fa5f8572 100644
+--- a/gl_b1300.diffconfig
++++ b/gl_b1300.diffconfig
+@@ -15,3 +15,4 @@ CONFIG_LUCI_LANG_fr=y
+ CONFIG_PACKAGE_kmod-tun=y
+ CONFIG_KERNEL_IPV6=y
+ CONFIG_IPV6=y
++CONFIG_PACKAGE_conntrack=y
+-- 
+2.25.1
+

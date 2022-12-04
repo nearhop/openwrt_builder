@@ -1,0 +1,24 @@
+From 13a6ce2b3e21c6a1e657b1b47cb8f685a3f370c5 Mon Sep 17 00:00:00 2001
+From: Venkata Chimata <venkatch@gmail.com>
+Date: Thu, 5 May 2022 17:40:42 +0530
+Subject: [PATCH] Add get_rootip.sh script to rootfs
+
+---
+ local-feeds/minim/unum/Makefile | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/local-feeds/minim/unum/Makefile b/local-feeds/minim/unum/Makefile
+index abe0fa6bab..5bb8a3833a 100644
+--- a/local-feeds/minim/unum/Makefile
++++ b/local-feeds/minim/unum/Makefile
+@@ -175,6 +175,7 @@ define Package/unum/install
+ 		$(CP) -L $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/$(AGENT_HARDWARE_ID)/* $(1)/; \
+ 	fi
+ 	$(INSTALL_BIN) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/switch_mode.sh $(1)/sbin/switch_mode.sh
++	$(INSTALL_BIN) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/get_rootip.sh $(1)/sbin/get_rootip.sh
+ 	$(INSTALL_BIN) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/run_on_board_ap.sh $(1)/sbin/run_on_board_ap.sh
+ 	$(INSTALL_BIN) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/run_on_board_sta.sh $(1)/sbin/run_on_board_sta.sh
+ 	$(INSTALL_BIN) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/onboarded.sh $(1)/sbin/onboarded.sh
+-- 
+2.25.1
+

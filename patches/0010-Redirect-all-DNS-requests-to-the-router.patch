@@ -1,0 +1,25 @@
+From 3c7624344e03ad00cd1e5a1e934eb2e4e9375e93 Mon Sep 17 00:00:00 2001
+From: Venkata Chimata <venkatch@gmail.com>
+Date: Wed, 1 Jun 2022 14:30:05 +0530
+Subject: [PATCH] Redirect all DNS requests to the router
+
+---
+ package/network/config/firewall/files/firewall.user | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/package/network/config/firewall/files/firewall.user b/package/network/config/firewall/files/firewall.user
+index 6f799063f5..5d964c0539 100644
+--- a/package/network/config/firewall/files/firewall.user
++++ b/package/network/config/firewall/files/firewall.user
+@@ -5,3 +5,8 @@
+ # Internal uci firewall chains are flushed and recreated on reload, so
+ # put custom rules into the root chains e.g. INPUT or FORWARD or into the
+ # special user chains, e.g. input_wan_rule or postrouting_lan_rule.
++opmode=`/sbin/uci get nearhop.@unum[0].opmode`
++if [ "$opmode" == "gw" ]; then
++	iptables -i br-lan -t nat -A PREROUTING -p udp --dport 53 -j ACCEPT
++	iptables -i br-lan -t nat -A PREROUTING -p tcp --dport 53 -j ACCEPT
++fi
+-- 
+2.25.1
+

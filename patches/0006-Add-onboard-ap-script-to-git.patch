@@ -1,0 +1,24 @@
+From edb4f8a86adfa9ab665cd7895c5e5117a7865701 Mon Sep 17 00:00:00 2001
+From: Venkata Chimata <venkatch@gmail.com>
+Date: Tue, 3 May 2022 10:46:22 +0530
+Subject: [PATCH] Add onboard ap script to git
+
+---
+ local-feeds/minim/unum/Makefile | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/local-feeds/minim/unum/Makefile b/local-feeds/minim/unum/Makefile
+index 17ee8e4efb..d0e5d1a6f1 100644
+--- a/local-feeds/minim/unum/Makefile
++++ b/local-feeds/minim/unum/Makefile
+@@ -175,6 +175,7 @@ define Package/unum/install
+ 		$(CP) -L $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/$(AGENT_HARDWARE_ID)/* $(1)/; \
+ 	fi
+ 	$(INSTALL_BIN) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/switch_mode.sh $(1)/sbin/switch_mode.sh
++	$(INSTALL_BIN) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/run_on_board_ap.sh $(1)/sbin/run_on_board_ap.sh
+ 	$(INSTALL_BIN) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/run_on_board_sta.sh $(1)/sbin/run_on_board_sta.sh
+ 	$(INSTALL_BIN) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/onboarded.sh $(1)/sbin/onboarded.sh
+ 	$(INSTALL_BIN) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/create_on_board_sta.sh $(1)/sbin/create_on_board_sta.sh
+-- 
+2.25.1
+

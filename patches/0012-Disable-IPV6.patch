@@ -1,0 +1,25 @@
+From 5e626c851b07db862d1c53f8d791523ab32810be Mon Sep 17 00:00:00 2001
+From: Venkata Chimata <venkatch@gmail.com>
+Date: Tue, 14 Jun 2022 22:34:18 +0530
+Subject: [PATCH] Disable IPV6
+
+---
+ gl_b1300.diffconfig | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/gl_b1300.diffconfig b/gl_b1300.diffconfig
+index 74fa5f8572..9a29428f0a 100644
+--- a/gl_b1300.diffconfig
++++ b/gl_b1300.diffconfig
+@@ -13,6 +13,5 @@ CONFIG_LUCI_LANG_en=y
+ CONFIG_LUCI_LANG_es=y
+ CONFIG_LUCI_LANG_fr=y
+ CONFIG_PACKAGE_kmod-tun=y
+-CONFIG_KERNEL_IPV6=y
+-CONFIG_IPV6=y
+-CONFIG_PACKAGE_conntrack=y
++# CONFIG_KERNEL_IPV6 is not set
++# CONFIG_IPV6 is not set
+-- 
+2.25.1
+

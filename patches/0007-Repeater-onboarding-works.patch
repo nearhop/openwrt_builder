@@ -1,0 +1,69 @@
+From c43887463abafacddd2cdb6db1423ade88dad4a8 Mon Sep 17 00:00:00 2001
+From: Venkata Chimata <venkatch@gmail.com>
+Date: Wed, 4 May 2022 16:53:40 +0530
+Subject: [PATCH] Repeater onboarding works
+
+---
+ local-feeds/minim/unum/Makefile      | 3 +--
+ local-feeds/nearhop/homenet/Makefile | 2 +-
+ minim.baseconfig                     | 6 +++---
+ 3 files changed, 5 insertions(+), 6 deletions(-)
+
+diff --git a/local-feeds/minim/unum/Makefile b/local-feeds/minim/unum/Makefile
+index d0e5d1a6f1..abe0fa6bab 100644
+--- a/local-feeds/minim/unum/Makefile
++++ b/local-feeds/minim/unum/Makefile
+@@ -162,7 +162,7 @@ define Package/unum/install
+ 	# LAN/WAN IP range overlap recovery scripts
+ 	$(INSTALL_BIN) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/fix_lan_addr.init $(1)/etc/init.d/fix_lan_addr
+ 	$(INSTALL_BIN) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/fix_lan_addr.sh $(1)/usr/bin/fix_lan_addr.sh
+-	$(INSTALL_BIN) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/restart_config.sh $(1)/usr/bin/restart_config.sh
++	$(INSTALL_BIN) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/set_repeater.sh $(1)/sbin/set_repeater.sh
+ 	# Agent files to keep through the firmware upgrade
+ 	$(INSTALL_DIR) $(1)/lib/upgrade/keep.d
+ 	echo "/etc/unum/unum.pem" > $(1)/lib/upgrade/keep.d/unum.upgrade
+@@ -181,7 +181,6 @@ define Package/unum/install
+ 	$(INSTALL_BIN) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/create_on_board_sta.sh $(1)/sbin/create_on_board_sta.sh
+ 	$(INSTALL_BIN) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/nearhop_retain $(1)//lib/upgrade/keep.d/
+ 	# Re-arrange the config as per the mode
+-	$(INSTALL_BIN) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/restart_config.init $(1)/etc/init.d/restart_config
+ 	# Installing properties.json to rootfs under $(AGENT_ETC_DIR) to avoid
+ 	# dealing with owrt build folders (although we do not need it on target)
+ 	RELEASE_FEATURES='$(RELEASE_FEATURES)' envsubst < $(PKG_BUILD_DIR_FILES)/release_properties.json > $(1)$(AGENT_ETC_DIR)/release_properties.json
+diff --git a/local-feeds/nearhop/homenet/Makefile b/local-feeds/nearhop/homenet/Makefile
+index 67377bec7c..5d63d560b7 100644
+--- a/local-feeds/nearhop/homenet/Makefile
++++ b/local-feeds/nearhop/homenet/Makefile
+@@ -38,7 +38,7 @@ define Build/Prepare
+ endef
+ 
+ define Build/Compile
+-	cd $(PKG_BUILD_DIR); make bin-$(MINIM_DEFAULT_TARGET)
++	cd $(PKG_BUILD_DIR); make bin-$(MINIM_DEFAULT_TARGET) ; make cli-$(MINIM_DEFAULT_TARGET)
+ endef
+ 
+ define Package/homenet/install
+diff --git a/minim.baseconfig b/minim.baseconfig
+index 424785abd3..9eb258b79d 100644
+--- a/minim.baseconfig
++++ b/minim.baseconfig
+@@ -26,13 +26,13 @@ CONFIG_PACKAGE_luci-ssl=y
+ CONFIG_VERSIONOPT=y
+ CONFIG_VERSION_BUG_URL=""
+ CONFIG_VERSION_CODE="$(MINIM_VERSION_CODE)"
+-CONFIG_VERSION_DIST="MINIM"
++CONFIG_VERSION_DIST="Nearhop"
+ CONFIG_VERSION_FILENAMES=y
+ CONFIG_VERSION_MANUFACTURER="$(MINIM_VERSION_CODE)"
+-CONFIG_VERSION_MANUFACTURER_URL="https://www.minim.co"
++CONFIG_VERSION_MANUFACTURER_URL="https://www.nearhop.com"
+ CONFIG_VERSION_NICK="$(MINIM_VERSION_NICK)"
+ CONFIG_VERSION_NUMBER="$(MINIM_VERSION_NUMBER)"
+-CONFIG_VERSION_SUPPORT_URL="https://www.minim.co"
++CONFIG_VERSION_SUPPORT_URL="https://www.nearhop.com"
+ # CONFIG_VERSION_CODE_FILENAMES is not set
+ # CONFIG_BUSYBOX_DEFAULT_FEATURE_IPV6 is not set
+ # CONFIG_PACKAGE_kmod-ebtables-ipv6 is not set
+-- 
+2.25.1
+

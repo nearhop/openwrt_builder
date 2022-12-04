@@ -1,0 +1,36 @@
+From 5f29d04c21c909c9c03e779c0ddbcf624491e221 Mon Sep 17 00:00:00 2001
+From: Venkata Chimata <venkatch@gmail.com>
+Date: Sun, 10 Jul 2022 17:51:31 +0530
+Subject: [PATCH] Nearhop version support
+
+---
+ build          | 4 ++++
+ nearhopversion | 1 +
+ 2 files changed, 5 insertions(+)
+ create mode 100644 nearhopversion
+
+diff --git a/build b/build
+index 50a0b0aea6..7c4c183a2e 100755
+--- a/build
++++ b/build
+@@ -89,6 +89,10 @@ export MINIM_DEFAULT_TARGET=$BUILD_TARGET
+ export MINIM_VERSION_NICK="LEDE"
+ export MINIM_VERSION_CODE=`git rev-parse --short HEAD`
+ 
++nearhopversion=`cat ../nearhopversion`
++if [ "$nearhopversion" != "" ]; then
++	export MINIM_VERSION_NUMBER=$nearhopversion
++fi
+ # Make sure the unum agent files are present
+ UNUM_MAKEFILE="$MINIM_UNUM_DIR/src/unum/unum-lede_generic.mk"
+ if [ ! -e "$UNUM_MAKEFILE" ]; then
+diff --git a/nearhopversion b/nearhopversion
+new file mode 100644
+index 0000000000..38f77a65b3
+--- /dev/null
++++ b/nearhopversion
+@@ -0,0 +1 @@
++2.0.1
+-- 
+2.25.1
+

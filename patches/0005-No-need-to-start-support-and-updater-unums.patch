@@ -1,0 +1,25 @@
+From 935f0e441cbf61b5836ea5c67edf7d3b6a634954 Mon Sep 17 00:00:00 2001
+From: Venkata Chimata <venkatch@gmail.com>
+Date: Tue, 5 Apr 2022 13:50:29 +0530
+Subject: [PATCH] No need to start support and updater unums
+
+---
+ local-feeds/minim/unum/Makefile | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/local-feeds/minim/unum/Makefile b/local-feeds/minim/unum/Makefile
+index b14cf97e5f..17ee8e4efb 100644
+--- a/local-feeds/minim/unum/Makefile
++++ b/local-feeds/minim/unum/Makefile
+@@ -157,8 +157,6 @@ define Package/unum/install
+ 	echo "export UNUM_NICENESS=13" >> $(1)$(AGENT_SYSTEM_CONF)
+ 	# Agent init files
+ 	$(INSTALL_DIR) $(1)/etc/init.d
+-	$(INSTALL_BIN) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/unum-updater.init $(1)/etc/init.d/unum-updater
+-	$(INSTALL_BIN) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/unum-support.init $(1)/etc/init.d/unum-support
+ 	$(INSTALL_BIN) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/unum.init $(1)/etc/init.d/unum
+ 	$(INSTALL_DATA) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/unum.common $(1)$(AGENT_ETC_DIR)/unum.common
+ 	# LAN/WAN IP range overlap recovery scripts
+-- 
+2.25.1
+

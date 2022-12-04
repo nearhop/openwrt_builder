@@ -1,0 +1,39 @@
+From d4876513a501565213218147b4442aa7b29b75b9 Mon Sep 17 00:00:00 2001
+From: Venkata Chimata <venkatch@gmail.com>
+Date: Thu, 9 Jun 2022 17:00:48 +0530
+Subject: [PATCH] Add platform specific files to Nearhop Rootfs
+
+---
+ build                                | 1 +
+ local-feeds/nearhop/homenet/Makefile | 2 ++
+ 2 files changed, 3 insertions(+)
+
+diff --git a/build b/build
+index 4cdbb0babb..50a0b0aea6 100755
+--- a/build
++++ b/build
+@@ -84,6 +84,7 @@ DATETIME=`date +"%y%m%d.%H%M.%S.0" | sed -E 's/\b0+([1-9][0-9]*)\b/\1/g'`
+ export MINIM_VERSION_NUMBER=${MINIM_VERSION_NUMBER:-$DATETIME}
+ export MINIM_UNUM_DIR=${MINIM_UNUM_DIR:-"$MY_DIR/../unum-sdk"}
+ export HOMENET_DIR=${HOMENET_DIR:-"$MY_DIR/../homenet"}
++export HOMENET_PLATFORM_DIR=${HOMENET_PLATFORM_DIR:-"$MY_DIR/../nearhop_platform"}
+ export MINIM_DEFAULT_TARGET=$BUILD_TARGET
+ export MINIM_VERSION_NICK="LEDE"
+ export MINIM_VERSION_CODE=`git rev-parse --short HEAD`
+diff --git a/local-feeds/nearhop/homenet/Makefile b/local-feeds/nearhop/homenet/Makefile
+index 5d63d560b7..986b960b97 100644
+--- a/local-feeds/nearhop/homenet/Makefile
++++ b/local-feeds/nearhop/homenet/Makefile
+@@ -34,7 +34,9 @@ endef
+ 
+ define Build/Prepare
+ 	mkdir -p $(PKG_BUILD_DIR)
++	mkdir -p $(PKG_BUILD_DIR)/../nearhop_platform
+ 	$(CP) $(HOMENET_DIR)/* $(PKG_BUILD_DIR)/
++	$(CP) $(HOMENET_PLATFORM_DIR)/* $(PKG_BUILD_DIR)/../nearhop_platform/
+ endef
+ 
+ define Build/Compile
+-- 
+2.25.1
+

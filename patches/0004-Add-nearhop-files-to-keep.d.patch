@@ -1,0 +1,32 @@
+From 558fab53dd8af2d1652e8966f6e61e6e3c303b5e Mon Sep 17 00:00:00 2001
+From: Venkata Chimata <venkatch@gmail.com>
+Date: Thu, 31 Mar 2022 21:59:28 +0530
+Subject: [PATCH] Add nearhop files to keep.d
+
+---
+ local-feeds/minim/unum/Makefile | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/local-feeds/minim/unum/Makefile b/local-feeds/minim/unum/Makefile
+index 0f61531583..b14cf97e5f 100644
+--- a/local-feeds/minim/unum/Makefile
++++ b/local-feeds/minim/unum/Makefile
+@@ -135,6 +135,7 @@ define Package/unum/install
+ 	# Agent executable
+ 	$(INSTALL_DIR) $(1)/usr/bin
+ 	$(INSTALL_DIR) $(1)/sbin
++	$(INSTALL_DIR) $(1)/lib/upgrade/keep.d/
+ 	$(INSTALL_BIN) $(PKG_BUILD_DIR_UNUM)/unum $(1)/usr/bin/
+ 	# Agent configuration folder
+ 	$(INSTALL_DIR) $(1)$(AGENT_ETC_DIR)
+@@ -179,6 +180,7 @@ define Package/unum/install
+ 	$(INSTALL_BIN) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/run_on_board_sta.sh $(1)/sbin/run_on_board_sta.sh
+ 	$(INSTALL_BIN) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/onboarded.sh $(1)/sbin/onboarded.sh
+ 	$(INSTALL_BIN) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/create_on_board_sta.sh $(1)/sbin/create_on_board_sta.sh
++	$(INSTALL_BIN) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/nearhop_retain $(1)//lib/upgrade/keep.d/
+ 	# Re-arrange the config as per the mode
+ 	$(INSTALL_BIN) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/restart_config.init $(1)/etc/init.d/restart_config
+ 	# Installing properties.json to rootfs under $(AGENT_ETC_DIR) to avoid
+-- 
+2.25.1
+

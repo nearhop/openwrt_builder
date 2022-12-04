@@ -1,0 +1,690 @@
+From a3a3f798d8f9710bddb01cd08348c516efc6fd1b Mon Sep 17 00:00:00 2001
+From: Venkat Chimata <venkatch@gmail.com>
+Date: Thu, 24 Mar 2022 18:02:54 +0530
+Subject: [PATCH] First version of unum agent integration
+
+---
+ build                           | 173 +++++++++++++++++++++++++++++
+ feeds.conf.default              |   1 +
+ gl_b1300.baseconfig             |   1 +
+ gl_b1300.diffconfig             |  17 +++
+ ipq40xx.config.seed             | 161 +++++++++++++++++++++++++++
+ local-feeds/minim/README        |  15 +++
+ local-feeds/minim/unum/Makefile | 188 ++++++++++++++++++++++++++++++++
+ minim.baseconfig                |  57 ++++++++++
+ 8 files changed, 613 insertions(+)
+ create mode 100755 build
+ create mode 120000 gl_b1300.baseconfig
+ create mode 100644 gl_b1300.diffconfig
+ create mode 100644 ipq40xx.config.seed
+ create mode 100644 local-feeds/minim/README
+ create mode 100644 local-feeds/minim/unum/Makefile
+ create mode 100644 minim.baseconfig
+
+diff --git a/build b/build
+new file mode 100755
+index 0000000000..82db098d28
+--- /dev/null
++++ b/build
+@@ -0,0 +1,173 @@
++#!/bin/bash
++
++MY_DIR=$(dirname "$0")
++cd "$MY_DIR"
++MY_DIR="$PWD"
++MY_NAME="$0"
++
++if [ "$1" == "-h" ] || [ "$1" == "--help" ]; then
++  echo "Usage: $MY_NAME [-d|-e] <TARGET_NAME>"
++  echo "Usage: $MY_NAME [-D|-h|--help]"
++  echo "TARGET_NAME - hardware type to build the image for"
++  echo "-d - make debug build of the agent"
++  echo "-D - recompile the agent binary only, debug is ON, no new firmware"
++  echo "     (requires full build prior to the first use and rebuilds unum"
++  echo "     agent for that prior build TARGET_NAME)"
++  echo "-e - buld with -j1 to see all errors"
++  echo "-A - recompile the agent binary only, debug is OFF, no new firmware"
++  echo "     (requires full build prior to the first use and rebuilds unum"
++  echo "     agent for that prior build TARGET_NAME)"
++  echo "-h/--help - this help"
++  echo "Available targets:"
++  ls -1 | sed -e 's/\.diffconfig//;tx;d;:x'
++  echo "You can set MINIM_DEFAULT_TARGET environment variable in the"
++  echo "shell to the name of the target you want the script to pick"
++  echo "automatically if nothing is specified on the command line."
++  echo "The agent repository should be accessible under ../unum-sdk"
++  echo "or in the location pointed to by MINIM_UNUM_DIR environment"
++  echo "variable."
++  exit 1
++fi
++
++while [ "${1:0:1}" == "-" ]; do
++case $1 in
++  -d)
++  echo "Turning debug ON"
++  export UNUM_DEBUG=1
++  shift
++  ;;
++  -D)
++  echo "Recompiling the agent binary"
++  export UNUM_DEBUG=1
++  AGENT_ONLY=1
++  shift
++  ;;
++  -A)
++  echo "Recompiling the agent binary"
++  AGENT_ONLY=1
++  shift
++  ;;
++  -e)
++  echo "Building with -j1"
++  NUM_CORES=1
++  shift
++  ;;
++  *)
++  echo "Unrecognized option $1"
++  echo "See $MY_NAME -h output for help"
++  exit 2
++  ;;
++esac
++done
++
++BUILD_TARGET=${1:-$MINIM_DEFAULT_TARGET}
++
++if [ "$AGENT_ONLY" == "1" ]; then
++  if [ ! -e .config ]; then
++    echo "Cannot find .config file"
++    exit 3
++  fi
++  BUILD_TARGET=$(cat .config | sed -n -e 's/CONFIG_VERSION_PRODUCT="\(.*\)"/\1/p')
++  BUILD_TARGET_HWREV=$(cat .config | sed -n -e 's/CONFIG_VERSION_HWREV="\(.*\)"/\1/p')
++  [ -z "$BUILD_TARGET_HWREV" ] || BUILD_TARGET=${BUILD_TARGET}_${BUILD_TARGET_HWREV}
++  echo "Using build target from .config: $BUILD_TARGET"
++fi
++
++if [ "$BUILD_TARGET" == "" ] || [ ! -e "$BUILD_TARGET.diffconfig" ]; then
++  echo "Invalid build target, use -h or run one of those:"
++  ls -1 | sed -e 's/\(.*\)\.diffconfig/export MINIM_DEFAULT_TARGET=\1/;tx;d;:x'
++  exit 2
++fi
++
++NUM_CORES=${NUM_CORES:-$(grep -c ^processor /proc/cpuinfo)}
++DATETIME=`date +"%y%m%d.%H%M.%S.0" | sed -E 's/\b0+([1-9][0-9]*)\b/\1/g'`
++export MINIM_VERSION_NUMBER=${MINIM_VERSION_NUMBER:-$DATETIME}
++export MINIM_UNUM_DIR=${MINIM_UNUM_DIR:-"$MY_DIR/../unum-sdk"}
++export MINIM_DEFAULT_TARGET=$BUILD_TARGET
++export MINIM_VERSION_NICK="LEDE"
++export MINIM_VERSION_CODE=`git rev-parse --short HEAD`
++
++# Make sure the unum agent files are present
++UNUM_MAKEFILE="$MINIM_UNUM_DIR/src/unum/unum-lede_generic.mk"
++if [ ! -e "$UNUM_MAKEFILE" ]; then
++  echo "Unable to find: $UNUM_MAKEFILE"
++  echo "Please set enviroment var MINIM_UNUM_DIR to point to"
++  echo "the location of the Unum SDK files, for example:"
++  echo "MINIM_UNUM_DIR=/work/unum-sdk ./build gl_b1300"
++  exit -1
++fi
++
++# From now on stop on any error
++set -e
++
++if [ "$AGENT_ONLY" == "1" ]; then
++  make -j1 V=s package/unum/{clean,compile}
++  exit $?
++fi
++
++#echo "Cleanup the ./tmp/info folder..."
++#rm -f ./tmp/info/*
++
++echo "Updating feeds"
++./scripts/feeds update -a
++./scripts/feeds install -a
++
++echo "Building the .config file..."
++if [ -e "$BUILD_TARGET.baseconfig" ]; then 
++  cp -f "$BUILD_TARGET.baseconfig" .config
++else
++  rm .config
++fi
++cat minim.baseconfig >> .config
++cat "$BUILD_TARGET.diffconfig" >> .config
++make defconfig
++
++echo "Cleaning up target folder..."
++eval `grep CONFIG_TARGET_BOARD= .config`
++eval `grep CONFIG_TARGET_SUBTARGET= .config`
++BOARD=$CONFIG_TARGET_BOARD
++SUBTARGET=${CONFIG_TARGET_SUBTARGET:-generic}
++if [ "$BOARD" == "" ] || [ "$SUBTARGET" == "" ]; then
++  echo "Unable to determine BOARD and SUBTARGET names for the build!"
++  exit 3
++else
++  FIRMWARE_DIR="$MY_DIR"/bin/targets/$BOARD/$SUBTARGET
++  echo "Firmware folder: $FIRMWARE_DIR"
++  rm -Rf "$FIRMWARE_DIR"/*
++fi
++
++echo "Clean our agent package before rebuild..."
++make V=s package/unum/clean
++
++# OpenWrt multicpu builds rarely work from the first try,
++# so we try to catch errors retry and finally run with -j1
++# if everything else fails.
++
++echo "Downloading..."
++if [ $NUM_CORES -gt 1 ]; then
++  make -j$NUM_CORES download || make -j1 V=s download
++else
++  make -j1 V=s download
++fi
++
++echo "Building the firmware..."
++if [ $NUM_CORES -gt 1 ]; then
++  make -j$NUM_CORES || make -j1 V=s
++else
++  make -j1 V=s
++fi
++
++echo
++echo "Firmware file(s):"
++files=`find $FIRMWARE_DIR -name *-sysupgrade*.bin`
++if [ "$files" != "" ]; then
++  ls -l "$FIRMWARE_DIR"/*-sysupgrade*.bin
++else
++  # No sysuprade file. Check if it is trx file (say for Broadcom)
++  fw_file=`echo $BUILD_TARGET | sed 's/_/-/g'`
++  ls -l "$FIRMWARE_DIR"/*"$fw_file"*-*squashfs.trx
++fi
++
++echo "Upgrade AP from the shell by running:"
++echo "./upgrade.sh <AP_IP_ADDRESS> <AP_PASSWORD>"
++echo "Note: upgrade requres the build .config file!"
+diff --git a/feeds.conf.default b/feeds.conf.default
+index 3dfca3a7df..69bffb120b 100644
+--- a/feeds.conf.default
++++ b/feeds.conf.default
+@@ -2,3 +2,4 @@ src-git packages https://git.openwrt.org/feed/packages.git^b0ccc356900f6e1e1dc61
+ src-git luci https://git.openwrt.org/project/luci.git^cc582ebfb3cb2782db841ad2a4e908d1df4046f9
+ src-git routing https://git.openwrt.org/feed/routing.git^10d3ffd8b30186b49538167bac1fa1bf9c88f860
+ src-git telephony https://git.openwrt.org/feed/telephony.git^001ae7137c88bb679284bfac5087cde65b5abf9a
++src-link minim ../local-feeds/minim
+diff --git a/gl_b1300.baseconfig b/gl_b1300.baseconfig
+new file mode 120000
+index 0000000000..16b8bcdfd5
+--- /dev/null
++++ b/gl_b1300.baseconfig
+@@ -0,0 +1 @@
++ipq40xx.config.seed
+\ No newline at end of file
+diff --git a/gl_b1300.diffconfig b/gl_b1300.diffconfig
+new file mode 100644
+index 0000000000..825d1a0acc
+--- /dev/null
++++ b/gl_b1300.diffconfig
+@@ -0,0 +1,17 @@
++# CONFIG_TARGET_MULTI_PROFILE is not set
++CONFIG_TARGET_ipq40xx_generic_DEVICE_glinet_gl-b1300=y
++CONFIG_VERSION_HWREV=""
++CONFIG_VERSION_PRODUCT="gl_b1300"
++CONFIG_PACKAGE_lldpd=y
++# CONFIG_PACKAGE_wpad is not set
++# CONFIG_PACKAGE_wpad-mini is not set
++CONFIG_PACKAGE_wpad-mesh=y
++CONFIG_PACKAGE_batctl-full=y
++CONFIG_PACKAGE_wpa-supplicant-wolfssl=y
++CONFIG_PACKAGE_wpad-mesh-openssl=y
++CONFIG_LUCI_LANG_en=y
++CONFIG_LUCI_LANG_es=y
++CONFIG_LUCI_LANG_fr=y
++CONFIG_PACKAGE_kmod-tun=y
++CONFIG_KERNEL_IPV6=y
++CONFIG_IPV6=y
+diff --git a/ipq40xx.config.seed b/ipq40xx.config.seed
+new file mode 100644
+index 0000000000..ba851791b9
+--- /dev/null
++++ b/ipq40xx.config.seed
+@@ -0,0 +1,161 @@
++CONFIG_TARGET_ipq40xx=y
++CONFIG_TARGET_ipq40xx_generic=y
++CONFIG_TARGET_MULTI_PROFILE=y
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_8dev_habanero-dvk=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_8dev_habanero-dvk=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_8dev_jalapeno=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_8dev_jalapeno=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_alfa-network_ap120c-ac=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_alfa-network_ap120c-ac=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_aruba_ap-303=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_aruba_ap-303=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_aruba_ap-303h=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_aruba_ap-303h=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_aruba_ap-365=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_aruba_ap-365=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_asus_map-ac2200=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_asus_map-ac2200=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_asus_rt-ac58u=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_asus_rt-ac58u=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_avm_fritzbox-4040=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_avm_fritzbox-4040=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_avm_fritzbox-7530=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_avm_fritzbox-7530=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_avm_fritzrepeater-1200=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_avm_fritzrepeater-1200=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_avm_fritzrepeater-3000=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_avm_fritzrepeater-3000=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_buffalo_wtr-m2133hp=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_buffalo_wtr-m2133hp=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_cellc_rtl30vw=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_cellc_rtl30vw=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_meraki_mr33=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_meraki_mr33=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_compex_wpj419=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_compex_wpj419=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_compex_wpj428=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_compex_wpj428=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_cilab_meshpoint-one=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_cilab_meshpoint-one=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_dlink_dap-2610=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_dlink_dap-2610=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_devolo_magic-2-wifi-next=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_devolo_magic-2-wifi-next=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_edgecore_ecw5211=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_edgecore_ecw5211=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_edgecore_oap100=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_edgecore_oap100=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_engenius_eap1300=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_engenius_eap1300=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_engenius_eap2200=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_engenius_eap2200=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_engenius_emd1=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_engenius_emd1=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_engenius_emr3500=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_engenius_emr3500=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_engenius_ens620ext=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_engenius_ens620ext=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_ezviz_cs-w3-wd1200g-eup=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_ezviz_cs-w3-wd1200g-eup=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_glinet_gl-ap1300=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_glinet_gl-ap1300=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_glinet_gl-b1300=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_glinet_gl-b1300=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_glinet_gl-s1300=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_glinet_gl-s1300=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_linksys_ea6350v3=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_linksys_ea6350v3=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_linksys_ea8300=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_linksys_ea8300=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_linksys_mr8300=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_linksys_mr8300=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_luma_wrtq-329acn=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_luma_wrtq-329acn=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_mobipromo_cm520-79f=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_mobipromo_cm520-79f=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_netgear_ex6100v2=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_netgear_ex6100v2=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_netgear_ex6150v2=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_netgear_ex6150v2=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_openmesh_a42=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_openmesh_a42=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_openmesh_a62=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_openmesh_a62=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_plasmacloud_pa1200=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_plasmacloud_pa1200=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_plasmacloud_pa2200=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_plasmacloud_pa2200=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_qcom_ap-dk01.1-c1=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_qcom_ap-dk01.1-c1=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_qcom_ap-dk04.1-c1=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_qcom_ap-dk04.1-c1=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_qxwlan_e2600ac-c1=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_qxwlan_e2600ac-c1=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_qxwlan_e2600ac-c2=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_qxwlan_e2600ac-c2=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_unielec_u4019-32m=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_unielec_u4019-32m=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_zyxel_nbg6617=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_zyxel_nbg6617=""
++CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_zyxel_wre6606=y
++CONFIG_TARGET_DEVICE_PACKAGES_ipq40xx_generic_DEVICE_zyxel_wre6606=""
++CONFIG_ALL_KMODS=y
++CONFIG_ALL_NONSHARED=y
++CONFIG_DEVEL=y
++CONFIG_TARGET_PER_DEVICE_ROOTFS=y
++# CONFIG_AUTOREMOVE is not set
++CONFIG_BUILDBOT=y
++CONFIG_COLLECT_KERNEL_DEBUG=y
++CONFIG_IB=y
++CONFIG_IMAGEOPT=y
++CONFIG_JSON_OVERVIEW_IMAGE_INFO=y
++CONFIG_KERNEL_BUILD_DOMAIN="buildhost"
++CONFIG_KERNEL_BUILD_USER="builder"
++# CONFIG_KERNEL_KALLSYMS is not set
++CONFIG_PACKAGE_cgi-io=y
++CONFIG_PACKAGE_libiwinfo-lua=y
++CONFIG_PACKAGE_liblua=y
++CONFIG_PACKAGE_liblucihttp=y
++CONFIG_PACKAGE_liblucihttp-lua=y
++CONFIG_PACKAGE_libubus-lua=y
++CONFIG_PACKAGE_lua=y
++CONFIG_PACKAGE_luci=y
++CONFIG_PACKAGE_luci-app-firewall=y
++CONFIG_PACKAGE_luci-app-opkg=y
++CONFIG_PACKAGE_luci-base=y
++CONFIG_PACKAGE_luci-lib-base=y
++CONFIG_PACKAGE_luci-lib-ip=y
++CONFIG_PACKAGE_luci-lib-jsonc=y
++CONFIG_PACKAGE_luci-lib-nixio=y
++CONFIG_PACKAGE_luci-mod-admin-full=y
++CONFIG_PACKAGE_luci-mod-network=y
++CONFIG_PACKAGE_luci-mod-status=y
++CONFIG_PACKAGE_luci-mod-system=y
++CONFIG_PACKAGE_luci-proto-ipv6=y
++CONFIG_PACKAGE_luci-proto-ppp=y
++CONFIG_PACKAGE_luci-ssl=y
++CONFIG_PACKAGE_luci-theme-bootstrap=y
++CONFIG_PACKAGE_px5g-wolfssl=y
++CONFIG_PACKAGE_rpcd=y
++CONFIG_PACKAGE_rpcd-mod-file=y
++CONFIG_PACKAGE_rpcd-mod-iwinfo=y
++CONFIG_PACKAGE_rpcd-mod-luci=y
++CONFIG_PACKAGE_rpcd-mod-rrdns=y
++CONFIG_PACKAGE_uhttpd=y
++CONFIG_PACKAGE_uhttpd-mod-ubus=y
++CONFIG_REPRODUCIBLE_DEBUG_INFO=y
++CONFIG_SDK=y
++CONFIG_TARGET_ALL_PROFILES=y
++CONFIG_VERSIONOPT=y
++CONFIG_VERSION_BUG_URL=""
++CONFIG_VERSION_CODE=""
++CONFIG_VERSION_DIST="OpenWrt"
++CONFIG_VERSION_FILENAMES=y
++CONFIG_VERSION_HOME_URL=""
++CONFIG_VERSION_HWREV=""
++CONFIG_VERSION_MANUFACTURER=""
++CONFIG_VERSION_MANUFACTURER_URL=""
++CONFIG_VERSION_NUMBER=""
++CONFIG_VERSION_PRODUCT=""
++CONFIG_VERSION_REPO="https://downloads.openwrt.org/releases/21.02.2"
++CONFIG_VERSION_SUPPORT_URL=""
+diff --git a/local-feeds/minim/README b/local-feeds/minim/README
+new file mode 100644
+index 0000000000..286ffa8cdb
+--- /dev/null
++++ b/local-feeds/minim/README
+@@ -0,0 +1,15 @@
++# LEDE Minim agent feed
++
++## Description
++
++This is feed for including the minim agent
++
++## Usage
++
++This feed should be enabled by default in the Minim builds.
++
++The content here should be minimized to only serve the purpose
++of configuring the build environment and passing on the options
++necessary to build the agent. All the install files should come
++from the agent repo.
++
+diff --git a/local-feeds/minim/unum/Makefile b/local-feeds/minim/unum/Makefile
+new file mode 100644
+index 0000000000..4064e9b1df
+--- /dev/null
++++ b/local-feeds/minim/unum/Makefile
+@@ -0,0 +1,188 @@
++#
++# Copyright (C) 2017 minim.co
++#
++
++include $(TOPDIR)/rules.mk
++
++PKG_NAME:=unum
++PKG_VERSION:=v2
++PKG_RELEASE:=1
++
++include $(INCLUDE_DIR)/package.mk
++
++define Package/unum
++  SECTION:=net
++  CATEGORY:=Network
++  TITLE:=Unum-v2 agent
++  URL:=http://www.minim.co
++  MAINTAINER:=minim.co <support@minim.co>
++  DEPENDS:=+libpthread +librt +libuci +jansson +libiwinfo \
++           +libcurl +libmbedtls +libnl-tiny +zlib
++  # Unable to enforce +@LIBCURL_MBEDTLS and have binary package dependencies
++  # at the same time (will have to figure out later). The conditional 
++  # dependencies like +!LIBCURL_MBEDTLS:libcurl aren't helping.
++  # Note: careful here, it fails without failing the build
++endef
++
++define Package/unum/description
++ Unum-v2 agent is a software component allowing a wireless router to be 
++ managed and continuously monitored by the Minim cloud. See http://www.minim.co
++ for more details.
++endef
++
++
++# We build from the local sources only, here are defines to 
++# replace if we decide to publish it and make a download tarball.
++AGENT_SOURCE_DIR=$(MINIM_UNUM_DIR)/src/unum
++AGENT_FILES_DIR=$(MINIM_UNUM_DIR)/files
++
++# Path where we store sources and file in the LEDE build tree (making it the
++# same as in our build system tree)
++PKG_BUILD_DIR_UNUM=$(PKG_BUILD_DIR)/src/unum
++PKG_BUILD_DIR_FILES=$(PKG_BUILD_DIR)/files
++
++# Subdir where the agent sources are (where to cd to run make)
++MAKE_PATH:=src/unum
++
++# Agent MODEL name for all the unum agent builds from LEDE w/ sources
++AGENT_MODEL_ID=lede_generic
++
++# Trusted CA list location on the target
++AGENT_TRUSTED_CA_LIST=/etc/ssl/certs/unum-ca-certificates.crt
++# Agent config folder on the target
++AGENT_ETC_DIR=/etc/unum
++# Agent system config on the target
++AGENT_SYSTEM_CONF=$(AGENT_ETC_DIR)/system.conf
++# Agent user config on the target
++AGENT_USER_CONF=$(AGENT_ETC_DIR)/user.conf
++# Agent SSH files folder
++AGENT_SSH_DIR=/etc/unum/.ssh
++# Agent support SSH authorized keys file on the target
++AGENT_SSH_AKEYS=$(AGENT_SSH_DIR)/authorized_keys
++# Agent support SSH RSA key file on the target
++AGENT_SSH_MYKEY=$(AGENT_SSH_DIR)/id_rsa
++# Agent known hosts file on the target
++AGENT_SSH_KNOWN=$(AGENT_SSH_DIR)/known_hosts
++
++# Agent hardware ID for this particular hardware target/subtarget/device
++ifeq ($(patsubst "%",%,$(CONFIG_VERSION_HWREV)),)
++  AGENT_HARDWARE_ID=$(patsubst "%",%,$(CONFIG_VERSION_PRODUCT))
++else
++  AGENT_HARDWARE_ID=$(patsubst "%",%,$(CONFIG_VERSION_PRODUCT))_$(patsubst "%",%,$(CONFIG_VERSION_HWREV))
++endif
++
++# Agent version. This is based on time if just the agent package is
++# built. The normal firmware build overrides this w/ its version number.
++ifeq ($(MINIM_VERSION_NUMBER),)
++  AGENT_VERSION_NUMBER=$(shell date +"%y%m%d.%H%M.%S.0" | sed -E 's/\b0+([1-9][0-9]*)\b/\1/g')
++else
++  AGENT_VERSION_NUMBER=$(MINIM_VERSION_NUMBER)
++endif
++
++# Add common, platform and target specific features to the release feature list
++RELEASE_FEATURES := $(shell cat "$(AGENT_FILES_DIR)/features-common.txt")
++ifneq ("$(wildcard $(AGENT_FILES_DIR)/$(AGENT_MODEL_ID)/features.txt)","")
++  RELEASE_FEATURES := $(RELEASE_FEATURES) $(shell cat "$(AGENT_FILES_DIR)/$(AGENT_MODEL_ID)/features.txt")
++endif
++ifneq ("$(wildcard $(AGENT_FILES_DIR)/$(AGENT_MODEL_ID)/features-$(AGENT_HARDWARE_ID).txt)","")
++  RELEASE_FEATURES := $(RELEASE_FEATURES) $(shell cat "$(AGENT_FILES_DIR)/$(AGENT_MODEL_ID)/features-$(AGENT_HARDWARE_ID).txt")
++endif
++# Create comma separated quoted release features list
++quote := "
++space := $(null) #
++comma := ,
++dash  := -
++under := _
++uc = $(subst a,A,$(subst b,B,$(subst c,C,$(subst d,D,$(subst e,E,$(subst f,F,$(subst \
++             g,G,$(subst h,H,$(subst i,I,$(subst j,J,$(subst k,K,$(subst l,L,$(subst \
++             m,M,$(subst n,N,$(subst o,O,$(subst p,P,$(subst q,Q,$(subst r,R,$(subst \
++             s,S,$(subst t,T,$(subst u,U,$(subst v,V,$(subst w,W,$(subst x,X,$(subst \
++             y,Y,$(subst z,Z,$1))))))))))))))))))))))))))
++RELEASE_FEATURES := $(sort $(strip $(RELEASE_FEATURES)))
++RELEASE_DEFINES := $(patsubst %,-DFEATURE_%,$(subst $(dash),$(under),$(call uc,$(RELEASE_FEATURES))))
++RELEASE_FEATURES := $(subst $(space),$(comma),$(patsubst %,$(quote)%$(quote),$(RELEASE_FEATURES)))
++
++# This is needed to prevent polluting the source tree w/ LEDE build artefacts.
++# If pulling sources from external tarball this step is not needed.
++define Build/Prepare
++	echo "Preparing: $(PKG_NAME)"
++	mkdir -p "$(PKG_BUILD_DIR_UNUM)"
++	cd "$(PKG_BUILD_DIR)/src/unum" && find -xtype l -exec rm -f {} \;
++	cd "$(AGENT_SOURCE_DIR)" && find * -type d -exec mkdir -p "$(PKG_BUILD_DIR_UNUM)/{}" \;
++	cd "$(AGENT_SOURCE_DIR)" && find * \( -type f \) -exec ln -sf "$(AGENT_SOURCE_DIR)/{}" "$(PKG_BUILD_DIR_UNUM)/{}" \;
++	cd "$(AGENT_SOURCE_DIR)" && find * \( -type l \) -exec cp -avf "$(AGENT_SOURCE_DIR)/{}" "$(PKG_BUILD_DIR_UNUM)/{}" \;
++	ln -s "$(AGENT_FILES_DIR)" "$(PKG_BUILD_DIR_FILES)"
++endef
++
++# We do not have configure (stop LEDE from even trying it)
++define Build/Configure
++endef
++
++TARGET_CFLAGS += $(FPIC) -Wno-array-bounds
++TARGET_CPPFLAGS:= \
++	-I$(STAGING_DIR)/usr/include/libnl-tiny \
++	$(TARGET_CPPFLAGS) \
++	-DCONFIG_LIBNL20
++
++define Build/Compile
++	$(call Build/Compile/Default,\
++	  AGENT_VERSION=$(patsubst "%",%,$(AGENT_VERSION_NUMBER))\
++	  MODEL=$(AGENT_MODEL_ID) HARDWARE=$(AGENT_HARDWARE_ID)\
++	  TARGET_OBJ="$(PKG_BUILD_DIR)/src" RELEASE_DEFINES="$(RELEASE_DEFINES)")
++endef
++
++define Package/unum/install
++	# Agent executable
++	$(INSTALL_DIR) $(1)/usr/bin
++	$(INSTALL_DIR) $(1)/sbin
++	$(INSTALL_BIN) $(PKG_BUILD_DIR_UNUM)/unum $(1)/usr/bin/
++	# Agent configuration folder
++	$(INSTALL_DIR) $(1)$(AGENT_ETC_DIR)
++	# Trusted certificates (install our own CA list)
++	$(INSTALL_DIR) $(1)/etc/ssl/certs
++	cat $(PKG_BUILD_DIR_FILES)/ca/*.pem > $(1)$(AGENT_TRUSTED_CA_LIST)
++	# SSH keys
++	$(INSTALL_DIR) $(1)$(AGENT_SSH_DIR)
++	$(INSTALL_DATA) $(PKG_BUILD_DIR_FILES)/ssh_keys/authorized_keys $(1)$(AGENT_SSH_AKEYS)
++	$(INSTALL_DATA) $(PKG_BUILD_DIR_FILES)/ssh_keys/id_rsa $(1)$(AGENT_SSH_MYKEY)
++	$(INSTALL_DATA) $(PKG_BUILD_DIR_FILES)/ssh_keys/known_hosts $(1)$(AGENT_SSH_KNOWN)
++	# Default agent config file
++	echo "export UNUM_CA_FILE=$(AGENT_TRUSTED_CA_LIST)" > $(1)$(AGENT_SYSTEM_CONF)
++	echo "export UNUM_SSH_DIR=$(AGENT_SSH_DIR)" >> $(1)$(AGENT_SYSTEM_CONF)
++	echo "export UNUM_SSH_AKEYS=$(AGENT_SSH_AKEYS)" >> $(1)$(AGENT_SYSTEM_CONF)
++	echo "export UNUM_SSH_MYKEY=$(AGENT_SSH_MYKEY)" >> $(1)$(AGENT_SYSTEM_CONF)
++	echo "export UNUM_SSH_KNOWN=$(AGENT_SSH_KNOWN)" >> $(1)$(AGENT_SYSTEM_CONF)
++	echo "export UNUM_PID_FILE_PREFIX=/var/run/unum" >> $(1)$(AGENT_SYSTEM_CONF)
++	echo "export UNUM_NICENESS=13" >> $(1)$(AGENT_SYSTEM_CONF)
++	# Agent init files
++	$(INSTALL_DIR) $(1)/etc/init.d
++	$(INSTALL_BIN) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/unum-updater.init $(1)/etc/init.d/unum-updater
++	$(INSTALL_BIN) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/unum-support.init $(1)/etc/init.d/unum-support
++	$(INSTALL_BIN) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/unum.init $(1)/etc/init.d/unum
++	$(INSTALL_DATA) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/unum.common $(1)$(AGENT_ETC_DIR)/unum.common
++	# LAN/WAN IP range overlap recovery scripts
++	$(INSTALL_BIN) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/fix_lan_addr.init $(1)/etc/init.d/fix_lan_addr
++	$(INSTALL_BIN) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/fix_lan_addr.sh $(1)/usr/bin/fix_lan_addr.sh
++	$(INSTALL_BIN) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/restart_config.sh $(1)/usr/bin/restart_config.sh
++	# Agent files to keep through the firmware upgrade
++	$(INSTALL_DIR) $(1)/lib/upgrade/keep.d
++	echo "/etc/unum/unum.pem" > $(1)/lib/upgrade/keep.d/unum.upgrade
++	echo "/etc/unum/unum.key" >> $(1)/lib/upgrade/keep.d/unum.upgrade
++	echo "$(AGENT_USER_CONF)" >> $(1)/lib/upgrade/keep.d/unum.upgrade
++	echo "/etc/unum/.credentials_provisioned" >> $(1)/lib/upgrade/keep.d/unum.upgrade
++	echo "/etc/unum/.wifi_provisioned" >> $(1)/lib/upgrade/keep.d/unum.upgrade
++	#Files to set default password and default SSID and key
++	if [ -d $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/$(AGENT_HARDWARE_ID)/. ]; then \
++		$(CP) -L $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/$(AGENT_HARDWARE_ID)/* $(1)/; \
++	fi
++	$(INSTALL_BIN) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/switch_mode.sh $(1)/sbin/switch_mode.sh
++	$(INSTALL_BIN) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/run_on_board_sta.sh $(1)/sbin/run_on_board_sta.sh
++	$(INSTALL_BIN) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/create_on_board_sta.sh $(1)/sbin/create_on_board_sta.sh
++	# Re-arrange the config as per the mode
++	$(INSTALL_BIN) $(PKG_BUILD_DIR_FILES)/$(AGENT_MODEL_ID)/restart_config.init $(1)/etc/init.d/restart_config
++	# Installing properties.json to rootfs under $(AGENT_ETC_DIR) to avoid
++	# dealing with owrt build folders (although we do not need it on target)
++	RELEASE_FEATURES='$(RELEASE_FEATURES)' envsubst < $(PKG_BUILD_DIR_FILES)/release_properties.json > $(1)$(AGENT_ETC_DIR)/release_properties.json
++endef
++
++$(eval $(call BuildPackage,unum,zlib))
+diff --git a/minim.baseconfig b/minim.baseconfig
+new file mode 100644
+index 0000000000..56aaab7f38
+--- /dev/null
++++ b/minim.baseconfig
+@@ -0,0 +1,57 @@
++CONFIG_PACKAGE_unum=y
++CONFIG_PACKAGE_iperf3=y
++CONFIG_ALL_NONSHARED=y
++CONFIG_DEVEL=y
++CONFIG_DEBUG=y
++CONFIG_DOWNLOAD_FOLDER="$(TOPDIR)/downloads"
++CONFIG_IMAGEOPT=y
++# CONFIG_IPV6 is not set
++# CONFIG_KERNEL_IPV6 is not set
++# CONFIG_KERNEL_KALLSYMS is not set
++CONFIG_LIBCURL_COOKIES=y
++CONFIG_LIBCURL_FILE=y
++CONFIG_LIBCURL_FTP=y
++CONFIG_LIBCURL_HTTP=y
++CONFIG_LIBCURL_MBEDTLS=y
++CONFIG_LIBCURL_NO_SMB="!"
++CONFIG_LIBCURL_PROXY=y
++CONFIG_LIBCURL_THREADED_RESOLVER=y
++CONFIG_PACKAGE_jansson=y
++CONFIG_PACKAGE_libcurl=y
++CONFIG_PACKAGE_curl=y
++CONFIG_PACKAGE_luci-theme-material=y
++CONFIG_PACKAGE_luci-ssl=y
++# CONFIG_PER_FEED_REPO_ADD_COMMENTED is not set
++CONFIG_VERSIONOPT=y
++CONFIG_VERSION_BUG_URL=""
++CONFIG_VERSION_CODE="$(MINIM_VERSION_CODE)"
++CONFIG_VERSION_DIST="MINIM"
++CONFIG_VERSION_FILENAMES=y
++CONFIG_VERSION_MANUFACTURER="$(MINIM_VERSION_CODE)"
++CONFIG_VERSION_MANUFACTURER_URL="https://www.minim.co"
++CONFIG_VERSION_NICK="$(MINIM_VERSION_NICK)"
++CONFIG_VERSION_NUMBER="$(MINIM_VERSION_NUMBER)"
++CONFIG_VERSION_SUPPORT_URL="https://www.minim.co"
++# CONFIG_VERSION_CODE_FILENAMES is not set
++# CONFIG_BUSYBOX_DEFAULT_FEATURE_IPV6 is not set
++# CONFIG_PACKAGE_kmod-ebtables-ipv6 is not set
++# CONFIG_PACKAGE_luci-proto-ipv6 is not set
++# CONFIG_SDK is not set
++# CONFIG_IB is not set
++CONFIG_PACKAGE_gdbserver=m
++CONFIG_PACKAGE_kmod-nf-nathelper-extra=y
++CONFIG_PACKAGE_kmod-nf-nathelper=y
++CONFIG_PACKAGE_kmod-ipt-raw=y
++CONFIG_PACKAGE_kmod-ipt-conntrack-extra=y
++# CONFIG_PACKAGE_kmod-openvswitch is not set
++# CONFIG_PACKAGE_kmod-openvswitch-geneve is not set
++# CONFIG_PACKAGE_kmod-openvswitch-geneve-intree is not set
++# CONFIG_PACKAGE_kmod-openvswitch-gre is not set
++# CONFIG_PACKAGE_kmod-openvswitch-gre-intree is not set
++# CONFIG_PACKAGE_kmod-openvswitch-intree is not set
++# CONFIG_PACKAGE_kmod-openvswitch-lisp-intree is not set
++# CONFIG_PACKAGE_kmod-openvswitch-stt-intree is not set
++# CONFIG_PACKAGE_kmod-openvswitch-vxlan is not set
++# CONFIG_PACKAGE_kmod-openvswitch-vxlan-intree is not set
++CONFIG_PACKAGE_luci-app-upnp=y
++CONFIG_PACKAGE_zlib=y
+-- 
+2.25.1
+
